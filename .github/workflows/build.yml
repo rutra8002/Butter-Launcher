@@ -20,6 +20,9 @@ jobs:
         with:
           node-version: 18
 
+      - name: Install dependencies
+        run: npm ci
+
       - name: Get version from package.json
         shell: pwsh
         run: |
@@ -32,22 +35,24 @@ jobs:
           git tag v$env:VERSION
           git push origin v$env:VERSION
 
-      - name: Create GitHub Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ env.VERSION }}
-          release_name: Release v${{ env.VERSION }}
-          draft: false
-          prerelease: ${{ contains(env.VERSION, 'beta') || contains(env.VERSION, 'alpha') }}
-
-      - name: Install dependencies
-        shell: pwsh
-        run: npm ci
-
       - name: Build Windows launcher
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
         run: npm run build
+
+      - name: List build files (debug)
+        shell: pwsh
+        run: |
+          if (Test-Path dist) { dir dist } else { echo "dist folder not found" }
+
+      - name: Create GitHub Release + Upload EXE
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: Release v${{ env.VERSION }}
+          prerelease: ${{ contains(env.VERSION, 'beta') || contains(env.VERSION, 'alpha') }}
+          files: |
+            dist/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
