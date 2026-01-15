@@ -1,53 +1,49 @@
-name: Launcher Build
+name: Launcher Build (Windows)
+
 on:
   push:
     branches: [ master ]
 
 jobs:
-  create-release:
+  build-windows:
     runs-on: windows-latest
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
 
       - name: Get version
-        run: echo "version=$(jq -r .version package.json)" >> $GITHUB_ENV
-      
-      - name: Create Release
-        id: create_release
+        shell: bash
+        run: |
+          echo "VERSION=$(node -p \"require('./package.json').version\")" >> $GITHUB_ENV
+
+      - name: Create tag
+        shell: bash
+        run: |
+          git tag v$VERSION
+          git push origin v$VERSION
+
+      - name: Create GitHub Release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ env.version }}
-          release_name: release ${{ env.version }}
+          tag_name: v${{ env.VERSION }}
+          release_name: Release v${{ env.VERSION }}
           draft: false
-          prerelease: ${{ contains(env.version, 'beta') || contains(env.version, 'alpha') }}
+          prerelease: ${{ contains(env.VERSION, 'beta') || contains(env.VERSION, 'alpha') }}
 
-  build-launcher:
-    needs: create-release
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - name: Check out Git repository
-        uses: actions/checkout@v1
-
-      - name: Set up Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: 18.x
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.x
-
-      - name: Install Dependencies
+      - name: Install dependencies
         run: npm ci
         shell: bash
 
-      - name: Build
+      - name: Build Windows launcher
         env:
-          GH_TOKEN: ${{ secrets.github_token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run build
         shell: bash
