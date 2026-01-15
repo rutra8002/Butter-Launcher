@@ -35,7 +35,7 @@ jobs:
           git tag v$env:VERSION
           git push origin v$env:VERSION
 
-      - name: Build Windows EXE (Electron Builder)
+      - name: Build & Release Electron App
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run release
