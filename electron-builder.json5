@@ -1,15 +1,17 @@
 // @see - https://www.electron.build/configuration/configuration
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "YourAppID",
+  "appId": "com.butter.launcher",
   "asar": true,
-  "productName": "YourAppName",
+  "productName": "Butter Launcher",
+  "copyright": "Copyright © 2025 Butter",
   "directories": {
     "output": "release/${version}"
   },
   "files": [
     "dist",
     "dist-electron"
+    "out"
   ],
   "mac": {
     "target": [
@@ -32,12 +34,17 @@
     "oneClick": false,
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": false
+    "deleteAppDataOnUninstall": true,
+    "allowElevation": true
   },
   "linux": {
     "target": [
-      "AppImage"
+      "AppImage",
+      "deb",
+      "snap",
+      "tar.gz"
     ],
     "artifactName": "${productName}-Linux-${version}.${ext}"
+    "category": "Game"
   }
 }
