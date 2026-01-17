@@ -31,7 +31,7 @@ Created after the game's release in early 2026, Butter Launcher aims to provide 
 
 ### Key Features
 
-* **⚡ Multiple Instances:** Keep your versions, pre-release versions, and soon server-specific clients completely separate.
+* **⚡ Multiple Instances:** Keep your versions, pre-release versions, and soon server-specific clients completely separate!
 * **🔓 Instant Access:** No official account required. Simply enter your username and play immediately.
 * **🎮 Discord Rich Presence:** Show off what you are playing, version, and elapsed time directly on your Discord profile.
 * **🚀 Modern Stack:** Built on a robust TypeScript base, ensuring a snappy and bug-free experience.
