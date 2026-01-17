@@ -2,10 +2,10 @@
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   "appId": "com.butter.launcher",
-  "icon": "src/assets/icon.ico",
+  "icon": "src/assets/icon.png",
   "asar": true,
   "productName": "Butter Launcher",
-  "copyright": "Copyright © 2026 Butter",
+  "copyright": "Copyright © 2026 Butter Labs",
   "directories": {
     "output": "release/${version}"
   },
@@ -39,6 +39,7 @@
     "allowElevation": true
   },
   "linux": {
+    "icon": "src/assets/icon.png",
     "target": [
       "AppImage",
       "deb",

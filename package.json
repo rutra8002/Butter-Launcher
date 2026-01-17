@@ -1,12 +1,19 @@
 {
   "name": "butter-launcher",
+  "description": "The best Hytale Launcher",
+  "author": "vZyle",
   "private": false,
   "version": "1.0.3",
   "type": "module",
   "main": "dist-electron/main.js",
   "build": {
     "extends": "electron-builder.json5",
-    "icon": "src/assets/icon.ico"
+    "win": {
+      "icon": "src/assets/icon.ico"
+    },
+    "linux": {
+      "icon": "src/assets/icon.png"
+    }
   },
   "scripts": {
     "dev": "vite",
