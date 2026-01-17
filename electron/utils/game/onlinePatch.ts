@@ -92,11 +92,18 @@ export const patchOnlineClientIfNeeded = async (
   win: BrowserWindow,
   progressChannel: "install-progress" | "online-patch-progress" = "online-patch-progress",
 ): Promise<"patched" | "skipped" | "up-to-date"> => {
+  // Windows-only: the upstream patch mechanism can deliver .exe patchers.
+  // On Linux/macOS we skip this step entirely to avoid breaking the client binary.
+  if (process.platform !== "win32") return "skipped";
+
   const url = version.patch_url;
   const expectedHash = version.patch_hash;
 
   // Requirement: if build not in list OR missing url/hash, don't patch.
   if (!url || !expectedHash) return "skipped";
+
+  // Safety: never apply a Windows executable patch if a bad URL slips through.
+  if (/\.exe(\?|$)/i.test(url)) return "skipped";
 
   const clientPath = getClientPath(gameDir, version);
   if (!fs.existsSync(clientPath)) return "skipped";
