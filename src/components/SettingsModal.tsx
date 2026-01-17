@@ -97,7 +97,7 @@ const SettingsModal: React.FC<{
               Launcher Version
             </label>
             <div className="text-xs text-gray-400 font-mono">
-              ButterLauncher_2026.01.17 V1.0.4
+              ButterLauncher_2026.01.17 V1.0.5
             </div>
           </div>
 

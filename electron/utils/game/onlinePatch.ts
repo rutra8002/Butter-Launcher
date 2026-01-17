@@ -102,8 +102,7 @@ export const patchOnlineClientIfNeeded = async (
   // Requirement: if build not in list OR missing url/hash, don't patch.
   if (!url || !expectedHash) return "skipped";
 
-  // Safety: never apply a Windows executable patch if a bad URL slips through.
-  if (/\.exe(\?|$)/i.test(url)) return "skipped";
+  // On Windows, patch_url is expected to point to a replacement executable.
 
   const clientPath = getClientPath(gameDir, version);
   if (!fs.existsSync(clientPath)) return "skipped";
