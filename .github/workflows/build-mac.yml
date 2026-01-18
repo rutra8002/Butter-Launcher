@@ -2,7 +2,7 @@ name: Release Build (macOS)
 
 on:
   push:
-    branches: [master]
+    branches: [MacOS-Test]
   workflow_dispatch:
 
 permissions:
