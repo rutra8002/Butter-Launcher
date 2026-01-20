@@ -5,11 +5,12 @@ import { promisify } from "util";
 import stream from "stream";
 import { spawn } from "child_process";
 import readline from "node:readline";
-import extract from "extract-zip";
 import { installButler } from "./butler";
 import { installJRE } from "./jre";
 import { checkGameInstallation } from "./check";
 import { readInstallManifest, writeInstallManifest } from "./manifest";
+import { logger } from "../logger";
+
 import {
   getLatestDir,
   getReleaseBuildDir,
@@ -51,6 +52,9 @@ const downloadPWR = async (
   const tempPWRPath = path.join(gameDir, `temp_${version.build_index}.pwr`);
 
   try {
+    logger.info(
+      `Starting PWR download for version ${version.build_name} from ${version.url}`,
+    );
     const response = await fetch(version.url);
     if (!response.ok)
       throw new Error(`Failed to download: ${response.statusText}`);
@@ -59,6 +63,10 @@ const downloadPWR = async (
     const contentLength = response.headers.get("content-length");
     const totalLength = contentLength ? parseInt(contentLength, 10) : undefined;
     let downloadedLength = 0;
+
+    logger.info(
+      `PWR size: ${totalLength ? (totalLength / 1024 / 1024).toFixed(2) + " MB" : "unknown"}`,
+    );
 
     // Emit a start event so UI doesn't show 0/0.
     win.webContents.send("install-progress", {
@@ -92,6 +100,8 @@ const downloadPWR = async (
       fs.createWriteStream(tempPWRPath),
     );
 
+    logger.info(`PWR download completed: ${tempPWRPath}`);
+
     win.webContents.send("install-progress", {
       phase: "pwr-download",
       percent: 100,
@@ -101,7 +111,10 @@ const downloadPWR = async (
 
     return tempPWRPath;
   } catch (error) {
-    console.error("Failed to download PWR:", error);
+    logger.error(
+      `Failed to download PWR for version ${version.build_name}:`,
+      error,
+    );
     return null;
   }
 };
@@ -112,9 +125,16 @@ const applyPWR = async (
   installDir: string,
   win: BrowserWindow,
 ) => {
+  logger.info(`Applying PWR patch from ${pwrPath} to ${installDir}`);
   const stagingDir = path.join(installDir, "staging-temp");
-  if (!fs.existsSync(installDir)) fs.mkdirSync(installDir, { recursive: true });
-  if (!fs.existsSync(stagingDir)) fs.mkdirSync(stagingDir, { recursive: true });
+  if (!fs.existsSync(installDir)) {
+    logger.info(`Creating install directory: ${installDir}`);
+    fs.mkdirSync(installDir, { recursive: true });
+  }
+  if (!fs.existsSync(stagingDir)) {
+    logger.info(`Creating staging directory: ${stagingDir}`);
+    fs.mkdirSync(stagingDir, { recursive: true });
+  }
 
   win.webContents.send("install-progress", {
     phase: "patching",
@@ -129,7 +149,10 @@ const applyPWR = async (
         windowsHide: true,
       },
     ).on("error", (error) => {
-      console.error("Butler process failed:", error);
+      logger.error(
+        "Butler process failed to start or encountered a critical error:",
+        error,
+      );
       reject(error);
     });
 
@@ -180,10 +203,11 @@ const applyPWR = async (
     }
 
     butlerProcess.stderr.on("data", (data) => {
-      console.error(data.toString());
+      logger.error(`Butler stderr: ${data.toString().trim()}`);
     });
+
     butlerProcess.on("close", (code) => {
-      console.log(`Butler process exited with code ${code}`);
+      logger.info(`Butler process exited with code ${code}`);
 
       // Force a final UI update so it doesn't stay stuck on "Downloading...".
       win.webContents.send("install-progress", {
@@ -196,84 +220,14 @@ const applyPWR = async (
   });
 };
 
-const applyFix = async (
-  gameFinalDir: string,
-  version: GameVersion,
-  win: BrowserWindow,
-) => {
-  try {
-    // No fix available for this version is not an error.
-    if (!version.hasFix || !version.fixURL) return true;
-
-    // download fix
-    const fixPath = path.join(gameFinalDir, "fix.zip");
-
-    const response = await fetch(version.fixURL);
-    if (!response.ok)
-      throw new Error(`Failed to download: ${response.statusText}`);
-    if (!response.body) throw new Error("No response body");
-    const contentLength = response.headers.get("content-length");
-    const totalLength = contentLength ? parseInt(contentLength, 10) : 0;
-    let downloadedLength = 0;
-
-    const progressStream = new stream.PassThrough();
-    progressStream.on("data", (chunk) => {
-      downloadedLength += chunk.length;
-      if (totalLength > 0) {
-        const percentage = (downloadedLength / totalLength) * 80;
-        win.webContents.send("install-progress", {
-          phase: "fix-download",
-          percent: Math.round(percentage),
-          total: totalLength,
-          current: downloadedLength,
-        });
-      }
-    });
-
-    await pipeline(
-      // @ts-ignore
-      stream.Readable.fromWeb(response.body),
-      progressStream,
-      fs.createWriteStream(fixPath),
-    );
-
-    win.webContents.send("install-progress", {
-      phase: "fix-download",
-      percent: 80,
-      total: totalLength,
-      current: downloadedLength,
-    });
-
-    // extract fix
-    let extractedEntries = 0;
-
-    await extract(fixPath, {
-      dir: gameFinalDir,
-      onEntry: (_, zipfile) => {
-        extractedEntries++;
-        const totalEntries = zipfile.entryCount;
-        const percentage = 80 + (extractedEntries / totalEntries) * 20;
-        win.webContents.send("install-progress", {
-          phase: "fix-extract",
-          percent: Math.round(percentage),
-          total: totalEntries,
-          current: extractedEntries,
-        });
-      },
-    });
-
-    return true;
-  } catch (error) {
-    console.error("Failed to apply fix:", error);
-    return false;
-  }
-};
-
 export const installGame = async (
   gameDir: string,
   version: GameVersion,
   win: BrowserWindow,
 ) => {
+  logger.info(
+    `Starting game installation for ${version.type} build ${version.build_name} in ${gameDir}`,
+  );
   try {
     migrateLegacyChannelInstallIfNeeded(gameDir, version.type);
 
@@ -283,11 +237,21 @@ export const installGame = async (
       if (fs.existsSync(latestDir)) {
         const existing = readInstallManifest(latestDir);
         if (existing && existing.build_index !== version.build_index) {
-          const targetBuildDir = getReleaseBuildDir(gameDir, existing.build_index);
+          logger.info(
+            `Retiring existing 'latest' build ${existing.build_index} to release builds.`,
+          );
+          const targetBuildDir = getReleaseBuildDir(
+            gameDir,
+            existing.build_index,
+          );
           if (fs.existsSync(targetBuildDir)) {
+            logger.info(
+              `Target build directory ${targetBuildDir} already exists, deleting legacy 'latest'.`,
+            );
             // Already installed elsewhere; remove latest to free the alias.
             fs.rmSync(latestDir, { recursive: true, force: true });
           } else {
+            logger.info(`Moving 'latest' to ${targetBuildDir}`);
             fs.mkdirSync(path.dirname(targetBuildDir), { recursive: true });
             fs.renameSync(latestDir, targetBuildDir);
           }
@@ -300,68 +264,86 @@ export const installGame = async (
     const { client, server, jre } = checkGameInstallation(gameDir, version);
 
     const installedManifest = readInstallManifest(installDir);
-    const alreadyOnThisBuild = installedManifest?.build_index === version.build_index;
+    const alreadyOnThisBuild =
+      installedManifest?.build_index === version.build_index;
 
     fs.mkdirSync(gameDir, { recursive: true });
     win.webContents.send("install-started");
 
     if (!jre) {
+      logger.info("JRE not found, installing JRE...");
       const jrePath = await installJRE(gameDir, win);
       if (!jrePath) throw new Error("Failed to install JRE");
+      logger.info(`JRE installed at ${jrePath}`);
     }
 
     // If binaries exist but build differs, we must still apply the new PWR.
     // Only skip the patching step when we *know* we're already on this build.
     if (!alreadyOnThisBuild) {
+      logger.info(
+        `New build detected (target: ${version.build_index}, current: ${installedManifest?.build_index ?? "none"}). Starting patch process.`,
+      );
       const butlerPath = await installButler();
       if (!butlerPath) throw new Error("Failed to install butler");
 
       const tempPWRPath = await downloadPWR(gameDir, version, win);
       if (!tempPWRPath) throw new Error("Failed to download PWR");
 
-      const gameFinalDir = await applyPWR(tempPWRPath, butlerPath, installDir, win);
-      console.log("PWR applied?", gameFinalDir);
+      const gameFinalDir = await applyPWR(
+        tempPWRPath,
+        butlerPath,
+        installDir,
+        win,
+      );
       if (!gameFinalDir) throw new Error("Failed to apply PWR");
-      console.log("PWR applied successfully");
+      logger.info(`PWR patch applied successfully to ${gameFinalDir}`);
 
       fs.unlinkSync(tempPWRPath);
-
-      const applyFixResult = await applyFix(gameFinalDir, version, win);
-      if (applyFixResult === false) throw new Error("Failed to apply fix");
 
       // Record the installed build so future updates can detect when patching is needed.
       writeInstallManifest(installDir, version);
 
       // On Linux/macOS, downloaded binaries may lose the executable bit.
       ensureClientExecutable(installDir);
+      logger.info("Game installation and patching complete.");
     } else {
       // If the manifest says it's installed, but binaries are missing, fall back to patching.
       // This keeps us safe against partial installs.
       if (!client || !server) {
+        logger.warn(
+          "Manifest indicates installation, but client or server binaries are missing. Re-patching.",
+        );
         const butlerPath = await installButler();
         if (!butlerPath) throw new Error("Failed to install butler");
 
         const tempPWRPath = await downloadPWR(gameDir, version, win);
         if (!tempPWRPath) throw new Error("Failed to download PWR");
 
-        const gameFinalDir = await applyPWR(tempPWRPath, butlerPath, installDir, win);
+        const gameFinalDir = await applyPWR(
+          tempPWRPath,
+          butlerPath,
+          installDir,
+          win,
+        );
         if (!gameFinalDir) throw new Error("Failed to apply PWR");
+        logger.info(`PWR patch re-applied successfully to ${gameFinalDir}`);
         fs.unlinkSync(tempPWRPath);
-
-        const applyFixResult = await applyFix(gameFinalDir, version, win);
-        if (applyFixResult === false) throw new Error("Failed to apply fix");
 
         writeInstallManifest(installDir, version);
 
         ensureClientExecutable(installDir);
+        logger.info("Game re-patching complete.");
+      } else {
+        logger.info("Game already installed and binaries verified.");
       }
     }
-    console.log("Game installed successfully");
+
+    logger.info("Game installation process finished successfully.");
 
     win.webContents.send("install-finished", version);
     return true;
   } catch (error) {
-    console.error("Installation failed:", error);
+    logger.error("Installation failed with error:", error);
     win.webContents.send(
       "install-error",
       error instanceof Error ? error.message : "Unknown error",

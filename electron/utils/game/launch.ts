@@ -5,6 +5,7 @@ import { spawn } from "child_process";
 import fs from "fs";
 import { genUUID } from "./uuid";
 import { installGame } from "./install";
+import { logger } from "../logger";
 
 const ensureExecutable = (filePath: string) => {
   if (process.platform === "win32") return;
@@ -37,23 +38,34 @@ export const launchGame = async (
   customUUID: string | null = null,
   callbacks?: {
     onGameSpawned?: () => void;
-    onGameExited?: (info: { code: number | null; signal: NodeJS.Signals | null }) => void;
-  }
+    onGameExited?: (info: {
+      code: number | null;
+      signal: NodeJS.Signals | null;
+    }) => void;
+  },
 ) => {
   if (retryCount > 1) {
     const msg = "Failed to launch game (max retries reached)";
-    console.error(msg);
+    logger.error(msg);
     win.webContents.send("launch-error", msg);
     return;
   }
 
+  logger.info(
+    `Starting launch process for ${version.type} ${version.build_name} for user ${username}`,
+  );
+
   let { client, server, jre } = checkGameInstallation(baseDir, version);
   if (!client || !server || !jre) {
-    console.log("Game not installed, missing:", { client, server, jre });
+    logger.info("Game components missing, starting installation:", {
+      client,
+      server,
+      jre,
+    });
     const installResult = await installGame(baseDir, version, win);
     if (!installResult) {
       const msg = "Game installation failed";
-      console.error(msg);
+      logger.error(msg);
       win.webContents.send("launch-error", msg);
       return;
     }
@@ -62,14 +74,20 @@ export const launchGame = async (
     ({ client, server, jre } = checkGameInstallation(baseDir, version));
     if (!client || !server || !jre) {
       const msg = "Game installation incomplete (missing files after install)";
-      console.error(msg, { client, server, jre });
+      logger.error(msg, { client, server, jre });
       win.webContents.send("launch-error", msg);
       return;
     }
+    logger.info("Game installation successful and verified.");
+  } else {
+    logger.info("Game installation verified.");
   }
 
   const userDir = join(baseDir, "UserData");
-  if (!fs.existsSync(userDir)) fs.mkdirSync(userDir);
+  if (!fs.existsSync(userDir)) {
+    logger.info(`Creating UserData directory at ${userDir}`);
+    fs.mkdirSync(userDir);
+  }
 
   const normalizeUuid = (raw: string): string | null => {
     const trimmed = raw.trim();
@@ -81,7 +99,11 @@ export const launchGame = async (
       return `${lower.slice(0, 8)}-${lower.slice(8, 12)}-${lower.slice(12, 16)}-${lower.slice(16, 20)}-${lower.slice(20)}`;
     }
 
-    if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(trimmed)) {
+    if (
+      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
+        trimmed,
+      )
+    ) {
       return trimmed.toLowerCase();
     }
 
@@ -89,6 +111,11 @@ export const launchGame = async (
   };
 
   const uuidToUse = customUUID ? normalizeUuid(customUUID) : null;
+  const finalUuid = uuidToUse ?? genUUID(username);
+
+  logger.info(
+    `Using UUID: ${finalUuid} (${customUUID ? "custom" : "generated"})`,
+  );
 
   const args = [
     "--app-dir",
@@ -100,12 +127,15 @@ export const launchGame = async (
     "--auth-mode",
     "offline",
     "--uuid",
-    uuidToUse ?? genUUID(username),
+    finalUuid,
     "--name",
     username,
   ];
 
+  logger.info("Launch arguments:", args);
+
   const spawnClient = (attempt: number) => {
+    logger.info(`Spawning client (attempt ${attempt + 1})...`);
     try {
       const env = { ...process.env };
       
@@ -130,6 +160,7 @@ export const launchGame = async (
       child.unref();
 
       child.on("spawn", () => {
+        logger.info("Game process spawned successfully.");
         callbacks?.onGameSpawned?.();
         win.webContents.send("launched");
       });
@@ -137,13 +168,16 @@ export const launchGame = async (
       child.on("error", (error: NodeJS.ErrnoException) => {
         // Common on Linux when the downloaded binary loses the executable bit.
         if (error?.code === "EACCES" && attempt === 0) {
-          console.warn("Launch EACCES: attempting to chmod +x and retry", client);
+          logger.warn(
+            "Launch EACCES: attempting to chmod +x and retry",
+            client,
+          );
           ensureExecutable(client);
           spawnClient(1);
           return;
         }
 
-        console.error(`Error launching game: ${error.message}`);
+        logger.error(`Error launching game: ${error.message}`, error);
         win.webContents.send("launch-error", error.message);
       });
 
@@ -153,10 +187,15 @@ export const launchGame = async (
         finished = true;
 
         if (code && code !== 0) {
-          console.error(
+          logger.error(
             `Game exited with code ${code}${signal ? ` (signal ${signal})` : ""}`,
           );
+        } else {
+          logger.info(
+            `Game exited smoothly (code ${code}${signal ? `, signal ${signal}` : ""})`,
+          );
         }
+
         callbacks?.onGameExited?.({ code, signal });
         try {
           win.webContents.send("launch-finished", { code, signal });
@@ -170,7 +209,7 @@ export const launchGame = async (
       child.once("close", onFinish);
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Unknown error";
-      console.error(`Error launching game: ${msg}`);
+      logger.error(`Error launching game (catch): ${msg}`, error);
       win.webContents.send("launch-error", msg);
     }
   };

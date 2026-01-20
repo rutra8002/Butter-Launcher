@@ -16,8 +16,6 @@ type GameVersion = {
   patch_hash?: string;
   original_url?: string;
   patch_note?: string;
-  hasFix?: boolean;
-  fixURL?: string;
   installed?: boolean;
 };
 

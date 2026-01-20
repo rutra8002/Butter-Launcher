@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       VERSION: ${{ steps.get_version.outputs.VERSION }}
+      TAG_EXISTS: ${{ steps.check_tag.outputs.EXISTS }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,18 +22,30 @@ jobs:
         id: get_version
         run: echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          git fetch --tags
+          if git tag -l | grep -q "^v${{ steps.get_version.outputs.VERSION }}$"; then
+            echo "EXISTS=true" >> $GITHUB_OUTPUT
+            echo "Version v${{ steps.get_version.outputs.VERSION }} already exists."
+          else
+            echo "EXISTS=false" >> $GITHUB_OUTPUT
+            echo "Version v${{ steps.get_version.outputs.VERSION }} is new."
+          fi
+
       - name: Create Git Tag
+        if: steps.check_tag.outputs.EXISTS == 'false'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag v${{ steps.get_version.outputs.VERSION }}
           git push origin v${{ steps.get_version.outputs.VERSION }}
-          # If the tag already exists (e.g. re-run), don't fail; just continue to build
-        continue-on-error: true
 
         # 2. Build and publish for each OS
   build:
     needs: prepare-release
+    if: needs.prepare-release.outputs.TAG_EXISTS == 'false'
     strategy:
       fail-fast: false
       matrix:

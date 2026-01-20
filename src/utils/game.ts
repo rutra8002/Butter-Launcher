@@ -1,13 +1,3 @@
-// @ts-ignore: no default export
-import semver from "semver";
-
-type FixVersions = {
-  [key: string]: {
-    path: string;
-    range: string;
-  }[];
-};
-
 const BASE_URL = "https://game-patches.hytale.com/patches";
 
 const VERSION_DETAILS_CACHE_KEY = "versionDetailsCache:v1";
@@ -27,7 +17,7 @@ const useSystemArch = (os: string) => {
 
 export const getGameVersion = async (
   versionType: VersionType = "release",
-  versionIndex: number = 1
+  versionIndex: number = 1,
 ) => {
   if (versionIndex < 1) versionIndex = 1;
 
@@ -43,7 +33,7 @@ export const getGameVersion = async (
   // get version details
   const details: VersionDetailsRoot = await window.ipcRenderer.invoke(
     "fetch:json",
-    `${import.meta.env.VITE_REQUEST_VERSIONS_DETAILS_URL}`
+    `${import.meta.env.VITE_REQUEST_VERSIONS_DETAILS_URL}`,
   );
 
   version = {
@@ -52,25 +42,6 @@ export const getGameVersion = async (
     build_index: versionIndex,
     build_name: details?.versions[versionIndex.toString()]?.name || "",
   };
-
-  // get version fix
-  const fix: FixVersions = await window.ipcRenderer.invoke(
-    "fetch:json",
-    `${import.meta.env.VITE_DOWNLOADS_API_URL}/online/versions.json`
-  );
-
-  if (fix[os]) {
-    const versionFix = fix[os].find((v) =>
-      semver.satisfies(versionIndex.toString(), v.range)
-    );
-    if (versionFix) {
-      version.hasFix = true;
-      version.fixURL = `${
-        import.meta.env.VITE_DOWNLOADS_API_URL
-      }/online/${os}/${versionFix.path}`;
-    }
-  }
-
   return version;
 };
 
@@ -78,7 +49,7 @@ const buildPwrUrl = (
   os: string,
   arch: string,
   versionType: VersionType,
-  buildIndex: number
+  buildIndex: number,
 ) => `${BASE_URL}/${os}/${arch}/${versionType}/0/${buildIndex}.pwr`;
 
 const formatYMD = (d: Date) => {
@@ -117,26 +88,31 @@ const loadCachedVersionDetails = (): VersionDetailsRoot | null => {
 const saveCachedVersionDetails = (details: VersionDetailsRoot, meta?: any) => {
   try {
     localStorage.setItem(VERSION_DETAILS_CACHE_KEY, JSON.stringify(details));
-    if (meta) localStorage.setItem(VERSION_DETAILS_META_KEY, JSON.stringify(meta));
+    if (meta)
+      localStorage.setItem(VERSION_DETAILS_META_KEY, JSON.stringify(meta));
   } catch {
     // ignore
   }
 };
 
-const fetchVersionDetailsIfOnline = async (): Promise<VersionDetailsRoot | null> => {
-  const url = `${import.meta.env.VITE_REQUEST_VERSIONS_DETAILS_URL}`;
-  try {
-    const status = await window.ipcRenderer.invoke("fetch:head", url);
-    if (status !== 200) return null;
-    return (await window.ipcRenderer.invoke("fetch:json", url)) as VersionDetailsRoot;
-  } catch {
-    return null;
-  }
-};
+const fetchVersionDetailsIfOnline =
+  async (): Promise<VersionDetailsRoot | null> => {
+    const url = `${import.meta.env.VITE_REQUEST_VERSIONS_DETAILS_URL}`;
+    try {
+      const status = await window.ipcRenderer.invoke("fetch:head", url);
+      if (status !== 200) return null;
+      return (await window.ipcRenderer.invoke(
+        "fetch:json",
+        url,
+      )) as VersionDetailsRoot;
+    } catch {
+      return null;
+    }
+  };
 
 const headPwrExists = async (
   versionType: VersionType,
-  buildIndex: number
+  buildIndex: number,
 ): Promise<boolean> => {
   const os = useSystemOS();
   const arch = useSystemArch(os);
@@ -152,7 +128,7 @@ const headPwrExists = async (
 const probeBeyondLatest = async (
   versionType: VersionType,
   startFrom: number,
-  maxExtra: number
+  maxExtra: number,
 ): Promise<number[]> => {
   const found: number[] = [];
   let current = startFrom;
@@ -180,7 +156,8 @@ const probeFromBuild1 = async (
 export const getGameVersions = async (versionType: VersionType = "release") => {
   // 1) Fetch the official versions list (your provided API format). If offline, use cache.
   const today = startOfToday();
-  const details = (await fetchVersionDetailsIfOnline()) ?? loadCachedVersionDetails();
+  const details =
+    (await fetchVersionDetailsIfOnline()) ?? loadCachedVersionDetails();
 
   if (details) {
     saveCachedVersionDetails(details, { fetchedAt: formatYMD(today) });
@@ -208,29 +185,6 @@ export const getGameVersions = async (versionType: VersionType = "release") => {
     for (const v of versions) v.isLatest = v.build_index === actualLatest;
 
     versions.sort((a, b) => b.build_index - a.build_index);
-
-    // Best-effort: apply fix metadata if available.
-    try {
-      const fix: FixVersions = await window.ipcRenderer.invoke(
-        "fetch:json",
-        `${import.meta.env.VITE_DOWNLOADS_API_URL}/online/versions.json`
-      );
-
-      if (fix[os]) {
-        for (const v of versions) {
-          const versionFix = fix[os].find((x) =>
-            semver.satisfies(v.build_index.toString(), x.range)
-          );
-          if (versionFix) {
-            v.hasFix = true;
-            v.fixURL = `${import.meta.env.VITE_DOWNLOADS_API_URL}/online/${os}/${versionFix.path}`;
-          }
-        }
-      }
-    } catch {
-      // ignore
-    }
-
     return versions;
   }
 
@@ -271,7 +225,7 @@ export const getGameVersions = async (versionType: VersionType = "release") => {
     : [];
 
   const finalIds = Array.from(new Set([...existingListed, ...extras])).sort(
-    (a, b) => a - b
+    (a, b) => a - b,
   );
 
   const os = useSystemOS();
@@ -286,13 +240,21 @@ export const getGameVersions = async (versionType: VersionType = "release") => {
         : `Build-${buildIndex}`;
 
     const patch_url =
-      typeof (detailsEntry as any)?.url === "string" ? (detailsEntry as any).url : undefined;
+      typeof (detailsEntry as any)?.url === "string"
+        ? (detailsEntry as any).url
+        : undefined;
     const original_url =
-      typeof (detailsEntry as any)?.original === "string" ? (detailsEntry as any).original : undefined;
+      typeof (detailsEntry as any)?.original === "string"
+        ? (detailsEntry as any).original
+        : undefined;
     const patch_hash =
-      typeof (detailsEntry as any)?.hash === "string" ? (detailsEntry as any).hash : undefined;
+      typeof (detailsEntry as any)?.hash === "string"
+        ? (detailsEntry as any).hash
+        : undefined;
     const patch_note =
-      typeof (detailsEntry as any)?.patch_note === "string" ? (detailsEntry as any).patch_note : undefined;
+      typeof (detailsEntry as any)?.patch_note === "string"
+        ? (detailsEntry as any).patch_note
+        : undefined;
 
     return {
       url: buildPwrUrl(os, arch, versionType, buildIndex),
@@ -317,24 +279,6 @@ export const getGameVersions = async (versionType: VersionType = "release") => {
 
   // Newest first in UI.
   versions.sort((a, b) => b.build_index - a.build_index);
-
-  // get version fix (same behavior as before, but apply to all returned versions)
-  const fix: FixVersions = await window.ipcRenderer.invoke(
-    "fetch:json",
-    `${import.meta.env.VITE_DOWNLOADS_API_URL}/online/versions.json`
-  );
-  if (fix[os]) {
-    for (const v of versions) {
-      const versionFix = fix[os].find((fx) =>
-        semver.satisfies(v.build_index.toString(), fx.range)
-      );
-      if (versionFix) {
-        v.hasFix = true;
-        v.fixURL = `${import.meta.env.VITE_DOWNLOADS_API_URL}/online/${os}/${versionFix.path}`;
-      }
-    }
-  }
-
   return versions;
 };
 
@@ -347,7 +291,7 @@ export const getInstalledGameVersions: () => GameVersion[] = () => {
 export const saveInstalledGameVersion = (version: GameVersion) => {
   const versions = getInstalledGameVersions();
   const next = versions.filter(
-    (v) => !(v.build_index === version.build_index && v.type === version.type)
+    (v) => !(v.build_index === version.build_index && v.type === version.type),
   );
   next.push(version);
   localStorage.setItem("installedVersions", JSON.stringify(next));

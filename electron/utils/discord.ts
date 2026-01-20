@@ -1,4 +1,5 @@
 import { Client, type SetActivity } from "@kostya-main/discord-rpc";
+import { logger } from "./logger";
 
 const dateElapsed = Date.now();
 
@@ -30,7 +31,8 @@ export const setChoosingVersionActivity = () => {
 };
 
 export const setPlayingActivity = (version: GameVersion) => {
-  const build = version.build_name || `Build-${version.build_index} ${version.type}`;
+  const build =
+    version.build_name || `Build-${version.build_index} ${version.type}`;
   setActivity({
     startTimestamp: Date.now(),
     details: "Playing Hytale No-Premium",
@@ -48,7 +50,7 @@ export const setActivity = (activity?: SetActivity) => {
   };
 
   client.user?.setActivity(rpcActivity).catch((err: any) => {
-    console.log("Discord RPC error:", err);
+    logger.error("Discord RPC error:", err);
   });
 };
 
@@ -56,30 +58,33 @@ export const connectRPC = async () => {
   client
     .login()
     .then(() => {
-      console.log("Discord RPC connected");
+      logger.info("Discord RPC connected");
       setChoosingVersionActivity();
     })
     .catch((err: any) => {
-      console.log("Discord RPC error:", err);
+      logger.error("Discord RPC error:", err);
     });
 };
 
-export const clearActivity = () => {
-  client.user?.clearActivity();
+export const clearActivity = async () => {
+  logger.info("Clearing Discord RPC activity");
+
+  try {
+    await client.user?.clearActivity();
+  } catch (err: any) {
+    logger.error("An error occurred while clearing Discord RPC activity", err);
+  }
 };
 
 export const disconnectRPC = async () => {
-  try {
-    await client.user?.clearActivity();
-  } catch {
-    // ignore
-  }
+  logger.info("Disconnecting Discord RPC");
+  await clearActivity();
 
   // Destroy/close the IPC connection to Discord so presence doesn't linger.
   try {
     (client as any).destroy?.();
-  } catch {
-    // ignore
+  } catch (err: any) {
+    logger.error("An error occurred while disconnecting Discord RPC", err);
   }
 };
 

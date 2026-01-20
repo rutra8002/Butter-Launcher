@@ -1,15 +1,24 @@
-import { app, BrowserWindow, ipcMain, shell, nativeImage, Tray, Menu } from "electron";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  shell,
+  nativeImage,
+  Tray,
+  Menu,
+} from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
 import { autoUpdater } from "electron-updater";
 import { META_DIRECTORY } from "./utils/const";
+import { logger } from "./utils/logger";
 
 import { installGame } from "./utils/game/install";
 import { checkGameInstallation } from "./utils/game/check";
 import { launchGame } from "./utils/game/launch";
 import {
-  clearActivity,
   connectRPC,
   disconnectRPC,
   setChoosingVersionActivity,
@@ -45,18 +54,24 @@ autoUpdater.setFeedURL({
   provider: "github",
 });
 
-autoUpdater.autoDownload = true;
+autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
 autoUpdater.autoRunAppAfterInstall = true;
 autoUpdater.forceDevUpdateConfig = false;
 
 app.on("ready", () => {
   app.setAppUserModelId("com.butter.launcher");
-  // Avoid background downloads that can saturate bandwidth; only check on startup in production.
-  autoUpdater.autoDownload = false;
+  // only check for updates on startup in production.
   if (!process.env["VITE_DEV_SERVER_URL"]) {
     autoUpdater.checkForUpdatesAndNotify();
   }
+
+  logger.info(`Butter Launcher is starting...
+    App Version: ${app.getVersion()}
+    Platform: ${os.type()} ${os.release()}
+    Memory: ${(os.freemem() / 1024 / 1024 / 1024).toFixed(2)} GB / ${(os.totalmem() / 1024 / 1024 / 1024).toFixed(2)} GB
+    Electron: ${process.versions.electron}, Node: ${process.versions.node}, Chromium: ${process.versions.chrome}
+  `);
 });
 
 app.on("before-quit", () => {
@@ -69,11 +84,7 @@ app.on("before-quit", () => {
 });
 
 app.on("will-quit", () => {
-  try {
-    void disconnectRPC();
-  } catch {
-    // ignore
-  }
+  logger.info("Closing Butter Launcher");
 });
 
 export const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
@@ -97,8 +108,8 @@ const destroyTray = () => {
   if (!tray) return;
   try {
     tray.destroy();
-  } catch {
-    // ignore
+  } catch (err) {
+    logger.error("An error occurred while destroying tray", err);
   }
   tray = null;
 };
@@ -124,8 +135,7 @@ const installBackgroundNetworkBlocker = (w: BrowserWindow) => {
 };
 
 function resolveAppIcon() {
-  const iconFile =
-    process.platform === "win32" ? "icon.ico" : "icon.png";
+  const iconFile = process.platform === "win32" ? "icon.ico" : "icon.png";
 
   const candidates = [
     // Dev (repo)
@@ -324,21 +334,21 @@ ipcMain.handle(
   "online-patch:check",
   async (_, gameDir: string, version: GameVersion) => {
     return await checkOnlinePatchNeeded(gameDir, version);
-  }
+  },
 );
 
 ipcMain.handle(
   "online-patch:state",
   async (_, gameDir: string, version: GameVersion) => {
     return getOnlinePatchState(gameDir, version);
-  }
+  },
 );
 
 ipcMain.handle(
   "online-patch:health",
   async (_, gameDir: string, version: GameVersion) => {
     return await getOnlinePatchHealth(gameDir, version);
-  }
+  },
 );
 
 ipcMain.handle("fetch:json", async (_, url, ...args) => {
@@ -385,7 +395,12 @@ ipcMain.handle("open-external", async (_, url: string) => {
     }
 
     const hostname = parsed.hostname.toLowerCase();
-    const allowedHosts = new Set(["discord.com", "www.discord.com", "discord.gg", "www.discord.gg"]);
+    const allowedHosts = new Set([
+      "discord.com",
+      "www.discord.com",
+      "discord.gg",
+      "www.discord.gg",
+    ]);
     if (!allowedHosts.has(hostname)) {
       throw new Error("Blocked external link");
     }
@@ -402,7 +417,7 @@ ipcMain.handle(
   "check-game-installation",
   (_, baseDir: string, version: GameVersion) => {
     return checkGameInstallation(baseDir, version);
-  }
+  },
 );
 
 ipcMain.handle(
@@ -441,7 +456,7 @@ ipcMain.handle(
     } catch {
       return null;
     }
-  }
+  },
 );
 
 ipcMain.handle("list-installed-versions", (_, baseDir: string) => {
@@ -461,7 +476,13 @@ ipcMain.on("install-game", (e, gameDir: string, version: GameVersion) => {
 
 ipcMain.on(
   "launch-game",
-  (e, gameDir: string, version: GameVersion, username: string, customUUID?: string | null) => {
+  (
+    e,
+    gameDir: string,
+    version: GameVersion,
+    username: string,
+    customUUID?: string | null,
+  ) => {
     const win = BrowserWindow.fromWebContents(e.sender);
     if (win) {
       // Reset any pending background transition from a previous launch attempt.
@@ -472,6 +493,7 @@ ipcMain.on(
 
       launchGame(gameDir, version, username, win, 0, customUUID ?? null, {
         onGameSpawned: () => {
+          logger.info(`Game spawned: ${version.type} ${version.build_name}`);
           isGameRunning = true;
           try {
             setPlayingActivity(version);
@@ -505,44 +527,68 @@ ipcMain.on(
         },
       });
     }
-  }
+  },
 );
 
-ipcMain.on("online-patch:enable", async (e, gameDir: string, version: GameVersion) => {
-  const win = BrowserWindow.fromWebContents(e.sender);
-  if (!win) return;
+ipcMain.on(
+  "online-patch:enable",
+  async (e, gameDir: string, version: GameVersion) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (!win) return;
 
-  try {
-    const result = await enableOnlinePatch(gameDir, version, win, "online-patch-progress");
-    win.webContents.send("online-patch-finished", result);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    win.webContents.send("online-patch-error", msg);
-  }
-});
+    try {
+      const result = await enableOnlinePatch(
+        gameDir,
+        version,
+        win,
+        "online-patch-progress",
+      );
+      win.webContents.send("online-patch-finished", result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      win.webContents.send("online-patch-error", msg);
+    }
+  },
+);
 
-ipcMain.on("online-patch:disable", async (e, gameDir: string, version: GameVersion) => {
-  const win = BrowserWindow.fromWebContents(e.sender);
-  if (!win) return;
+ipcMain.on(
+  "online-patch:disable",
+  async (e, gameDir: string, version: GameVersion) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (!win) return;
 
-  try {
-    const result = await disableOnlinePatch(gameDir, version, win, "online-unpatch-progress");
-    win.webContents.send("online-unpatch-finished", result);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    win.webContents.send("online-unpatch-error", msg);
-  }
-});
+    try {
+      const result = await disableOnlinePatch(
+        gameDir,
+        version,
+        win,
+        "online-unpatch-progress",
+      );
+      win.webContents.send("online-unpatch-finished", result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      win.webContents.send("online-unpatch-error", msg);
+    }
+  },
+);
 
-ipcMain.on("online-patch:fix-client", async (e, gameDir: string, version: GameVersion) => {
-  const win = BrowserWindow.fromWebContents(e.sender);
-  if (!win) return;
+ipcMain.on(
+  "online-patch:fix-client",
+  async (e, gameDir: string, version: GameVersion) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (!win) return;
 
-  try {
-    const result = await fixClientToUnpatched(gameDir, version, win, "online-unpatch-progress");
-    win.webContents.send("online-unpatch-finished", result);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    win.webContents.send("online-unpatch-error", msg);
-  }
-});
+    try {
+      const result = await fixClientToUnpatched(
+        gameDir,
+        version,
+        win,
+        "online-unpatch-progress",
+      );
+      win.webContents.send("online-unpatch-finished", result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      win.webContents.send("online-unpatch-error", msg);
+    }
+  },
+);
