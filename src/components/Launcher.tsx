@@ -5,6 +5,7 @@ import butterBg from "../assets/butter-bg.png";
 import butterLogo from "../assets/butter-logo.png";
 import SettingsModal from "./SettingsModal";
 import settingsIcon from "../assets/settings.svg";
+import DiscordLogo from "../assets/discord.svg";
 import DragBar from "./DragBar";
 import ProgressBar from "./ProgressBar";
 import { IconChevronDown } from "@tabler/icons-react";
@@ -279,28 +280,25 @@ const Launcher: React.FC<{ onLogout?: () => void }> = ({ onLogout }) => {
           </div>
           <IconChevronDown
             size={18}
-            className={`text-white/80 transition-transform duration-300 ${
-              versionsOpen ? "rotate-180" : "rotate-0"
-            }`}
+            className={`text-white/80 transition-transform duration-300 ${versionsOpen ? "rotate-180" : "rotate-0"
+              }`}
           />
         </button>
 
         <div
-          className={`mt-2 rounded-xl border border-white/10 bg-black/45 backdrop-blur-md shadow-xl overflow-hidden transition-all duration-300 ${
-            versionsOpen
+          className={`mt-2 rounded-xl border border-white/10 bg-black/45 backdrop-blur-md shadow-xl overflow-hidden transition-all duration-300 ${versionsOpen
               ? "max-h-[220px] opacity-100 translate-y-0"
               : "max-h-0 opacity-0 -translate-y-1 pointer-events-none"
-          } ${versionsOpen ? "animate-popIn animate-softGlow" : ""}`}
+            } ${versionsOpen ? "animate-popIn animate-softGlow" : ""}`}
         >
           <div className="p-3">
             <div className="flex gap-1 mb-3 bg-white/5 rounded-lg p-1">
               <button
                 type="button"
-                className={`flex-1 text-xs px-2 py-1 rounded-md transition ${
-                  versionType === "release"
+                className={`flex-1 text-xs px-2 py-1 rounded-md transition ${versionType === "release"
                     ? "bg-gradient-to-r from-[#3b82f6] to-[#60a5fa] text-white shadow"
                     : "text-gray-200 hover:bg-white/10"
-                }`}
+                  }`}
                 onClick={() => {
                   restoreUpdatePrompt();
                   setVersionType("release");
@@ -310,11 +308,10 @@ const Launcher: React.FC<{ onLogout?: () => void }> = ({ onLogout }) => {
               </button>
               <button
                 type="button"
-                className={`flex-1 text-xs px-2 py-1 rounded-md transition ${
-                  versionType === "pre-release"
+                className={`flex-1 text-xs px-2 py-1 rounded-md transition ${versionType === "pre-release"
                     ? "bg-gradient-to-r from-[#3b82f6] to-[#60a5fa] text-white shadow"
                     : "text-gray-200 hover:bg-white/10"
-                }`}
+                  }`}
                 onClick={() => {
                   restoreUpdatePrompt();
                   setVersionType("pre-release");
@@ -342,9 +339,8 @@ const Launcher: React.FC<{ onLogout?: () => void }> = ({ onLogout }) => {
 
                 {availableVersions.map((v, idx) => {
                   const name = v.build_name?.trim() || `Build-${v.build_index}`;
-                  const suffix = `${v.installed ? " • installed" : ""}${
-                    v.isLatest && v.type === "release" ? " • latest" : ""
-                  }`;
+                  const suffix = `${v.installed ? " • installed" : ""}${v.isLatest && v.type === "release" ? " • latest" : ""
+                    }`;
                   return (
                     <option key={`${v.type}:${v.build_index}`} value={String(idx)}>
                       {name}{suffix}
@@ -392,11 +388,11 @@ const Launcher: React.FC<{ onLogout?: () => void }> = ({ onLogout }) => {
           }}
           style={{ width: 40, height: 40 }}
         >
-        <img
-          src="src/assets/discord.svg"
-          alt="Discord"
-          className="w-5 h-5"
-        />
+          <img
+            src={DiscordLogo}
+            alt="Discord"
+            className="w-5 h-5"
+          />
         </button>
       </div>
       <div className="flex items-start justify-between p-6">
@@ -451,11 +447,10 @@ const Launcher: React.FC<{ onLogout?: () => void }> = ({ onLogout }) => {
               {patchAvailable && !needsFixClient ? (
                 <button
                   type="button"
-                  className={`min-w-[140px] h-[52px] rounded-lg px-4 text-sm font-bold shadow-lg transition disabled:opacity-50 ${
-                    onlinePatchEnabled
+                  className={`min-w-[140px] h-[52px] rounded-lg px-4 text-sm font-bold shadow-lg transition disabled:opacity-50 ${onlinePatchEnabled
                       ? "bg-white/10 hover:bg-white/20 text-white"
                       : "bg-linear-to-r from-[#2563eb] to-[#60a5fa] text-white hover:scale-105"
-                  }`}
+                    }`}
                   disabled={launching || gameLaunched}
                   onClick={() => {
                     // If enabled but outdated, re-run enable to download/apply the new patch.

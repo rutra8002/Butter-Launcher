@@ -40,6 +40,16 @@ const SettingsModal: React.FC<{
     }
   };
 
+  const handleOpenModDir = async () => {
+    try {
+      const dir = gameDir ?? (await window.config.getDefaultGameDirectory());
+      await window.config.openFolder(`${dir}/UserData/Mods`);
+    } catch (e) {
+      console.error("Failed to open mods directory", e);
+      alert("Failed to open mods directory");
+    }
+  };
+
   useEffect(() => {
     if (!open) return;
     const stored = localStorage.getItem("customUUID") || "";
@@ -65,7 +75,7 @@ const SettingsModal: React.FC<{
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md animate-fade-in">
       <div
         className={`
-          relative w-full max-w-4xl h-[400px] mx-auto
+          relative w-full max-w-4xl h-[450px] mx-auto
           rounded-xl
           bg-gradient-to-b from-[#1b2030]/95 to-[#141824]/95
           border border-[#2a3146]
@@ -119,15 +129,20 @@ const SettingsModal: React.FC<{
                 <FolderOpen size={18} />
               </button>
             </div>
-
             <div className="space-y-2">
               <label className="text-xs uppercase tracking-widest text-gray-400">
-                Launcher Version
+                Mods Directory
               </label>
-              <div className="text-xs font-mono text-gray-300 bg-[#1f2538] border border-[#2a3146] rounded px-3 py-2">
-                {LAUNCHER_BUILD_STRING}
-              </div>
+              <button
+                className="w-full flex items-center justify-between bg-[#1f2538] hover:bg-[#262d44] border border-[#2a3146] rounded-lg px-4 py-2 text-white transition"
+                onClick={handleOpenModDir}
+              >
+                <span className="text-sm">Open Folder</span>
+                <FolderOpen size={18} />
+              </button>
             </div>
+
+
 
             <div className="col-span-2 space-y-2">
               <label className="text-xs uppercase tracking-widest text-gray-400">
@@ -181,7 +196,6 @@ const SettingsModal: React.FC<{
 
         {/* FOOTER */}
         <div className="pt-4 mt-4 border-t border-[#2a3146] flex items-center justify-between gap-4">
-
           <div className="text-left">
             <span className="text-[10px] uppercase tracking-widest text-gray-500 font-semibold">
               Credits
@@ -199,7 +213,10 @@ const SettingsModal: React.FC<{
             </div>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3">
+            <div className="text-[11px] font-mono text-gray-400">
+              {LAUNCHER_BUILD_STRING}
+            </div>
             <button
               className="px-4 py-2 rounded-lg font-semibold border border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition disabled:opacity-50"
               disabled={checkingUpdates}
